@@ -1,0 +1,132 @@
+<script type="text/javascript">
+  (function() {
+      RED.plugins.registerPlugin("why-questions", {
+          onadd: function() {
+
+              // ---- Create sidebar container ----
+              var content = $("<div>")
+                  .css({"position":"relative","height":"100%", "padding":"10px", "overflow":"auto"});
+
+              // Placeholder until data loads
+              var placeholder = $("<div>").text("Simulation hasn't ended yet, no questions available.");
+              content.append(placeholder);
+
+              // Register sidebar
+              RED.actions.add("core:show-why-questions", function() {
+                  RED.sidebar.show("why-questions")
+              });
+
+              RED.sidebar.addTab({
+                  id: "why-questions",
+                  name: "Why questions",
+                  label: "Why",
+                  iconClass: "fa fa-question",
+                  content: content,
+                  action: "core:show-why-questions"
+              });
+
+              // Listen for when user changes tabs
+              RED.events.on("workspace:change", function(ws) {
+                  currentFlowId = ws.workspace;       // ws is the workspace id (string)
+                  console.log("Workspace changed to:", currentFlowId);
+                  loadQuestions();
+              });
+
+              // Load questions AFTER editor is ready
+              RED.events.on("editor:open", function() {
+                  loadQuestions();
+              });
+
+              function loadQuestions() {
+                  if (!currentFlowId) {
+                      console.log("Flow ID not ready yet, retrying in 200ms...");
+                      return setTimeout(loadQuestions, 200);
+                  }
+
+                  console.log("Loading questions for flow:", currentFlowId);
+                  // CLEAR previous content
+                  content.empty();
+                  let url = `http://localhost:8000/questions`;
+
+                  fetch(url)
+                    .then(res => res.json())
+                    .then(data => {
+                        placeholder.remove();
+
+                        // Your backend returns a dictionary, not a list
+                        // Convert it:
+                        let questions = Object.entries(data).map(([q, a]) => ({ q, a }));
+
+                        if (questions.length === 0) {
+                            content.append("<div>Simulation hasn't ended yet, no questions available.</div>");
+                            return;
+                        }
+
+                        questions.forEach(item => {
+                            let qa = createQA(item.q, item.a);
+                            content.append(qa);
+                        });
+                    })
+                    .catch(err => {
+                        placeholder.text("Failed to load questions.");
+                        console.error("Error loading questions:", err);
+                    });
+              }
+
+              // ---- Create a question+answer UI block ----
+              function createQA(questionText, answerText) {
+                  let wrapper = $("<div>");
+
+                  let question = $(`
+                      <div class="question">
+                          <span class="arrow">▸</span> ${questionText}
+                      </div>
+                  `);
+
+                  let answer = $(`
+                      <div class="answer">${answerText}</div>
+                  `);
+
+                  // Toggle behavior
+                  question.on("click", function() {
+                      let isOpen = answer.is(":visible");
+                      answer.toggle(!isOpen);
+                      question.find(".arrow").text(isOpen ? "▸" : "▾");
+                  });
+
+                  wrapper.append(question);
+                  wrapper.append(answer);
+                  return wrapper;
+              }
+
+              // ---- Add CSS into the page ----
+              $("<style>")
+                  .text(`
+                      .question {
+                          cursor: pointer;
+                          user-select: none;
+                          font-weight: bold;
+                          border: 1px solid black;
+                          padding: 4px;
+                          margin-bottom: 4px;
+                          border-radius: 5px;
+                          background: #f9f9f9;
+                      }
+                      .answer {
+                          display: none;
+                          margin-left: 10px;
+                          border: 1px solid black;
+                          padding: 4px;
+                          border-radius: 5px;
+                          margin-bottom: 6px;
+                          background: #ffffff;
+                      }
+                  `)
+                  .appendTo("head");
+
+              // ---- Load questions when sidebar is added ----
+              loadQuestions();
+          }
+      })
+  })();
+</script>
