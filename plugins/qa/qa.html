@@ -1,132 +1,172 @@
 <script type="text/javascript">
-  (function() {
-      RED.plugins.registerPlugin("why-questions", {
-          onadd: function() {
+  (function () {
+    RED.plugins.registerPlugin("why-questions", {
+      onadd: function () {
+        // -------------------------------------------------------------
+        //  Create sidebar container
+        // -------------------------------------------------------------
+        var content = $("<div>").css({
+          position: "relative",
+          height: "100%",
+          padding: "10px",
+          overflow: "auto",
+        });
 
-              // ---- Create sidebar container ----
-              var content = $("<div>")
-                  .css({"position":"relative","height":"100%", "padding":"10px", "overflow":"auto"});
+        var placeholder = $("<div>").text(
+          "Simulation hasn't ended yet, no questions available."
+        );
+        content.append(placeholder);
 
-              // Placeholder until data loads
-              var placeholder = $("<div>").text("Simulation hasn't ended yet, no questions available.");
-              content.append(placeholder);
+        // -------------------------------------------------------------
+        //  Register sidebar
+        // -------------------------------------------------------------
+        RED.actions.add("core:show-why-questions", function () {
+          RED.sidebar.show("why-questions");
+        });
 
-              // Register sidebar
-              RED.actions.add("core:show-why-questions", function() {
-                  RED.sidebar.show("why-questions")
-              });
+        RED.sidebar.addTab({
+          id: "why-questions",
+          name: "Why questions",
+          label: "Why",
+          iconClass: "fa fa-question",
+          content: content,
+          action: "core:show-why-questions",
+        });
 
-              RED.sidebar.addTab({
-                  id: "why-questions",
-                  name: "Why questions",
-                  label: "Why",
-                  iconClass: "fa fa-question",
-                  content: content,
-                  action: "core:show-why-questions"
-              });
+        // -------------------------------------------------------------
+        //  Workspace change resets state
+        // -------------------------------------------------------------
+        RED.events.on("workspace:change", function (ws) {
+          currentFlowId = ws.workspace;
+          console.log("Workspace changed to:", currentFlowId);
 
-              // Listen for when user changes tabs
-              RED.events.on("workspace:change", function(ws) {
-                  currentFlowId = ws.workspace;       // ws is the workspace id (string)
-                  console.log("Workspace changed to:", currentFlowId);
-                  loadQuestions();
-              });
+          content.empty();
+          content.append(
+            "<div>Simulation hasn't ended yet, no questions available.</div>"
+          );
+          fetch("http://localhost:8000/clear_questions")
+        });
 
-              // Load questions AFTER editor is ready
-              RED.events.on("editor:open", function() {
-                  loadQuestions();
-              });
+        // -------------------------------------------------------------
+        //  Question rendering
+        // -------------------------------------------------------------
+        function updateSidebarWithQuestions(data) {
+          content.empty();
 
-              function loadQuestions() {
-                  if (!currentFlowId) {
-                      console.log("Flow ID not ready yet, retrying in 200ms...");
-                      return setTimeout(loadQuestions, 200);
-                  }
+          const questions = Object.entries(data).map(([q, a]) => ({ q, a }));
 
-                  console.log("Loading questions for flow:", currentFlowId);
-                  // CLEAR previous content
-                  content.empty();
-                  let url = `http://localhost:8000/questions`;
-
-                  fetch(url)
-                    .then(res => res.json())
-                    .then(data => {
-                        placeholder.remove();
-
-                        // Your backend returns a dictionary, not a list
-                        // Convert it:
-                        let questions = Object.entries(data).map(([q, a]) => ({ q, a }));
-
-                        if (questions.length === 0) {
-                            content.append("<div>Simulation hasn't ended yet, no questions available.</div>");
-                            return;
-                        }
-
-                        questions.forEach(item => {
-                            let qa = createQA(item.q, item.a);
-                            content.append(qa);
-                        });
-                    })
-                    .catch(err => {
-                        placeholder.text("Failed to load questions.");
-                        console.error("Error loading questions:", err);
-                    });
-              }
-
-              // ---- Create a question+answer UI block ----
-              function createQA(questionText, answerText) {
-                  let wrapper = $("<div>");
-
-                  let question = $(`
-                      <div class="question">
-                          <span class="arrow">▸</span> ${questionText}
-                      </div>
-                  `);
-
-                  let answer = $(`
-                      <div class="answer">${answerText}</div>
-                  `);
-
-                  // Toggle behavior
-                  question.on("click", function() {
-                      let isOpen = answer.is(":visible");
-                      answer.toggle(!isOpen);
-                      question.find(".arrow").text(isOpen ? "▸" : "▾");
-                  });
-
-                  wrapper.append(question);
-                  wrapper.append(answer);
-                  return wrapper;
-              }
-
-              // ---- Add CSS into the page ----
-              $("<style>")
-                  .text(`
-                      .question {
-                          cursor: pointer;
-                          user-select: none;
-                          font-weight: bold;
-                          border: 1px solid black;
-                          padding: 4px;
-                          margin-bottom: 4px;
-                          border-radius: 5px;
-                          background: #f9f9f9;
-                      }
-                      .answer {
-                          display: none;
-                          margin-left: 10px;
-                          border: 1px solid black;
-                          padding: 4px;
-                          border-radius: 5px;
-                          margin-bottom: 6px;
-                          background: #ffffff;
-                      }
-                  `)
-                  .appendTo("head");
-
-              // ---- Load questions when sidebar is added ----
-              loadQuestions();
+          if (questions.length === 0) {
+            content.append(
+              "<div>Simulation hasn't ended yet, no questions available.</div>"
+            );
+            return;
           }
-      })
+
+          questions.forEach((item) => {
+            let qa = createQA(item.q, item.a);
+            content.append(qa);
+          });
+        }
+
+        function loadQuestions() {
+          fetch("http://localhost:8000/questions")
+            .then((res) => res.json())
+            .then(updateSidebarWithQuestions)
+            .catch((err) => {
+              console.error("Failed to load questions:", err);
+            });
+        }
+
+        // -------------------------------------------------------------
+        //  Expandable Q/A blocks
+        // -------------------------------------------------------------
+        function createQA(questionText, answerText) {
+          let wrapper = $("<div>");
+
+          let question = $(`
+                    <div class="question">
+                        <span class="arrow">▸</span> ${questionText}
+                    </div>
+                `);
+
+          let answer = $(`
+                    <div class="answer">${answerText}</div>
+                `);
+
+          question.on("click", function () {
+            const isOpen = answer.is(":visible");
+            answer.toggle(!isOpen);
+            question.find(".arrow").text(isOpen ? "▸" : "▾");
+          });
+
+          wrapper.append(question);
+          wrapper.append(answer);
+          return wrapper;
+        }
+
+        // -------------------------------------------------------------
+        //  CSS
+        // -------------------------------------------------------------
+        $("<style>")
+          .text(
+            `
+                    .question {
+                        cursor: pointer;
+                        user-select: none;
+                        font-weight: bold;
+                        border: 1px solid black;
+                        padding: 4px;
+                        margin-bottom: 4px;
+                        border-radius: 5px;
+                        background: #f9f9f9;
+                    }
+                    .answer {
+                        display: none;
+                        margin-left: 10px;
+                        border: 1px solid black;
+                        padding: 4px;
+                        border-radius: 5px;
+                        margin-bottom: 6px;
+                        background: #ffffff;
+                    }
+                `
+          )
+          .appendTo("head");
+
+        // =============================================================
+        //  POLLING SYSTEM (1s, only when sidebar visible)
+        // =============================================================
+        let pollInterval = null;
+        let lastDataJSON = "";
+
+        function startPolling() {
+          if (pollInterval) {
+            console.log("Polling already active, skipping...");
+            return;
+          }
+          console.log("Starting question polling...");
+          pollInterval = setInterval(fetchQuestionsPoll, 1000);
+        }
+
+        function fetchQuestionsPoll() {
+          console.log("Polling for questions...");
+          fetch("http://localhost:8000/questions")
+            .then((res) => res.json())
+            .then((data) => {
+              const json = JSON.stringify(data);
+              if (json === lastDataJSON) return; // No change
+              lastDataJSON = json;
+
+              updateSidebarWithQuestions(data);
+            })
+            .catch((err) => {
+              console.warn("Polling error:", err);
+            });
+        }
+
+        // Initial load
+        startPolling();
+      },
+    });
   })();
 </script>
