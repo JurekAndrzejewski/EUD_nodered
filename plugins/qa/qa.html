@@ -13,7 +13,7 @@
         });
 
         var placeholder = $("<div>").text(
-          "Simulation hasn't ended yet, no questions available."
+          "Simulation hasn't ended yet, no questions available. If it was run and nothing happened, ensure that all nodes are connected to each other and the last node is 'finish'."
         );
         content.append(placeholder);
 
@@ -42,9 +42,9 @@
 
           content.empty();
           content.append(
-            "<div>Simulation hasn't ended yet, no questions available.</div>"
+            "<div>Simulation hasn't ended yet, no questions available. If it was run and nothing happened, ensure that all nodes are connected to each other and the last node is 'finish'.</div>"
           );
-          fetch("http://localhost:8000/clear_questions")
+          fetch("http://localhost:8000/clear_questions");
         });
 
         // -------------------------------------------------------------
@@ -52,29 +52,16 @@
         // -------------------------------------------------------------
         function updateSidebarWithQuestions(data) {
           content.empty();
-
-          const questions = Object.entries(data).map(([q, a]) => ({ q, a }));
-
-          if (questions.length === 0) {
+          if (!data || data.length === 0) {
             content.append(
-              "<div>Simulation hasn't ended yet, no questions available.</div>"
+              "<div>Simulation hasn't ended yet, no questions available. If it was run and nothing happened, ensure that all nodes are connected to each other and the last node is 'finish'.</div>"
             );
             return;
           }
-
-          questions.forEach((item) => {
-            let qa = createQA(item.q, item.a);
-            content.append(qa);
+          data.forEach((item) => {
+              let qa = createQA(item.question, item.answer);
+              content.append(qa);
           });
-        }
-
-        function loadQuestions() {
-          fetch("http://localhost:8000/questions")
-            .then((res) => res.json())
-            .then(updateSidebarWithQuestions)
-            .catch((err) => {
-              console.error("Failed to load questions:", err);
-            });
         }
 
         // -------------------------------------------------------------
@@ -149,14 +136,14 @@
         }
 
         function fetchQuestionsPoll() {
-          console.log("Polling for questions...");
           fetch("http://localhost:8000/questions")
             .then((res) => res.json())
             .then((data) => {
               const json = JSON.stringify(data);
               if (json === lastDataJSON) return; // No change
               lastDataJSON = json;
-
+              console.log("data before");
+              console.log(data);
               updateSidebarWithQuestions(data);
             })
             .catch((err) => {
